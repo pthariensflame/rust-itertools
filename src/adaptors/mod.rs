@@ -1208,6 +1208,71 @@ impl<I, F, T, U, E> Iterator for TryMapResults<I, F>
     }
 }
 
+/// An iterator adapter to filter and apply a fallible transformation on values within a nested `Result`.
+///
+/// See [`.try_filter_map_results()`](../trait.Itertools.html#method.try_filter_map_results) for more information.
+#[must_use = "iterator adaptors are lazy and do nothing unless consumed"]
+pub struct TryFilterMapResults<I, F> {
+    iter: I,
+    f: F
+}
+
+/// Create a new `TryFilterMapResults` iterator.
+pub fn try_filter_map_results<I, F, T, U, E>(iter: I, f: F) -> TryFilterMapResults<I, F>
+    where I: Iterator<Item = Result<T, E>>,
+          F: FnMut(T) -> Result<Option<U>, E>
+{
+    TryFilterMapResults {
+        iter: iter,
+        f: f,
+    }
+}
+
+impl<I, F, T, U, E> Iterator for TryFilterMapResults<I, F>
+    where I: Iterator<Item = Result<T, E>>,
+          F: FnMut(T) -> Result<Option<U>, E>
+{
+    type Item = Result<U, E>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            match self.iter.next() {
+                Some(Ok(v)) => {
+                    if let Some(v) = (self.f)(v).transpose() {
+                        return Some(v);
+                    }
+                },
+                Some(Err(e)) => return Some(Err(e)),
+                None => return None,
+            }
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.iter.size_hint()
+    }
+
+    fn fold<Acc, Fold>(self, init: Acc, mut fold_f: Fold) -> Acc
+        where Fold: FnMut(Acc, Self::Item) -> Acc,
+    {
+        let mut f = self.f;
+        self.iter.fold(init, move |acc, v| {
+            if let Some(v) = v.and_then(&mut f).transpose() {
+                fold_f(acc, v)
+            } else {
+                acc
+            }
+        })
+    }
+
+    fn collect<C>(self) -> C
+        where C: FromIterator<Self::Item>
+    {
+        let mut f = self.f;
+        self.iter.filter_map(move |v| v.and_then(&mut f).transpose()).collect()
+    }
+}
+
 /// An iterator adapter to get the positions of each element that matches a predicate.
 ///
 /// See [`.positions()`](../trait.Itertools.html#method.positions) for more information.

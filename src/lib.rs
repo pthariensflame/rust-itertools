@@ -59,6 +59,7 @@ pub mod structs {
         Batching,
         Step,
         MapResults,
+        TryFilterMapResults,
         TryMapResults,
         Merge,
         MergeBy,
@@ -652,6 +653,24 @@ pub trait Itertools : Iterator {
               F: FnMut(T) -> Result<U, E>,
     {
         adaptors::try_map_results(self, f)
+    }
+
+    /// Return an iterator adaptor that filters and transforms every
+    /// `Result::Ok` value with the provided fallible closure.
+    /// `Result::Err` values in the original iterator are unchanged.
+    ///
+    /// ```
+    /// use itertools::Itertools;
+    ///
+    /// let input = vec![Ok(11), Ok(41), Err(false), Ok(i32::max_value())];
+    /// let it = input.into_iter().try_filter_map_results(|i| if i > 20 { Some(i.checked_add(1).ok_or(true)).transpose() } else { Ok(None) });
+    /// itertools::assert_equal(it, vec![Ok(42), Err(false), Err(true)]);
+    /// ```
+    fn try_filter_map_results<F, T, U, E>(self, f: F) -> TryFilterMapResults<Self, F>
+        where Self: Iterator<Item = Result<T, E>> + Sized,
+              F: FnMut(T) -> Result<Option<U>, E>,
+    {
+        adaptors::try_filter_map_results(self, f)
     }
 
     /// Return an iterator adaptor that merges the two base iterators in

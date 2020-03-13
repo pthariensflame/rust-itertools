@@ -1249,7 +1249,7 @@ impl<I, F, T, U, E> Iterator for TryFilterMapResults<I, F>
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        self.iter.size_hint()
+        (0, self.iter.size_hint().1)
     }
 
     fn fold<Acc, Fold>(self, init: Acc, mut fold_f: Fold) -> Acc

@@ -1228,6 +1228,14 @@ pub fn try_filter_map_results<I, F, T, U, E>(iter: I, f: F) -> TryFilterMapResul
     }
 }
 
+fn transpose_result<T, E>(result: Result<Option<T>, E>) -> Option<Result<T, E>> {
+    match result {
+        Ok(Some(v)) => Some(Ok(v)),
+        Ok(None) => None,
+        Err(e) => Some(Err(e)),
+    }
+}
+
 impl<I, F, T, U, E> Iterator for TryFilterMapResults<I, F>
     where I: Iterator<Item = Result<T, E>>,
           F: FnMut(T) -> Result<Option<U>, E>
@@ -1252,24 +1260,23 @@ impl<I, F, T, U, E> Iterator for TryFilterMapResults<I, F>
         (0, self.iter.size_hint().1)
     }
 
-    fn fold<Acc, Fold>(self, init: Acc, mut fold_f: Fold) -> Acc
+    fn fold<Acc, Fold>(self, init: Acc, fold_f: Fold) -> Acc
         where Fold: FnMut(Acc, Self::Item) -> Acc,
     {
         let mut f = self.f;
-        self.iter.fold(init, move |acc, v| {
-            if let Some(v) = v.and_then(&mut f).transpose() {
-                fold_f(acc, v)
-            } else {
-                acc
-            }
-        })
+        self.iter.filter_map(|v| {
+            transpose_result(v.and_then(&mut f))
+        }).fold(init, fold_f)
+
     }
 
     fn collect<C>(self) -> C
         where C: FromIterator<Self::Item>
     {
         let mut f = self.f;
-        self.iter.filter_map(move |v| v.and_then(&mut f).transpose()).collect()
+        self.iter.filter_map(|v| {
+            transpose_result(v.and_then(&mut f))
+        }).collect()
     }
 }
 
